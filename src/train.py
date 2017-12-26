@@ -21,16 +21,16 @@ parser.add_argument('-n', '--epochs', default=100, type=int, help='number of tot
 parser.add_argument('-b', '--batch-size', default=1, type=int, help='mini-batch size (default: 1)')
 parser.add_argument('-lr', '--learning-rate', default=1e-6, type=float, help='initial learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
-parser.add_argument('-dir', '--save-directory', default='../saved_checkpoints/exp3/', type=str, help='path to save directory')
+parser.add_argument('-dir', '--save-directory', default='../checkpoints/', type=str, help='path to save directory')
 
 def main():
 
     args = parser.parse_args()
-    print args
+    print(args)
     # load dataset
     transform = transforms.Compose([Normalize(), ToTensor()])
-    alov = datasets.ALOVDataset('../data/alov300/imagedata++/',
-                                '../data/alov300/alov300++_rectangleAnnotation_full/',
+    alov = datasets.ALOVDataset('../../ALOV/Frames/',
+                                '../../ALOV/GT/',
                                 transform)
     dataloader = DataLoader(alov, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
@@ -106,15 +106,15 @@ def evaluate(model, dataloader, criterion, epoch):
     dataset = dataloader.dataset
     running_loss = 0
     # test on a sample sequence from training set itself
-    for i in xrange(64):
+    for i in range(64):
         sample = dataset[i]
         sample['currimg'] = sample['currimg'][None,:,:,:]
         sample['previmg'] = sample['previmg'][None,:,:,:]
         x1, x2 = sample['previmg'], sample['currimg']
         y = sample['currbb']
-        x1 = Variable(x1.cuda())
-        x2 = Variable(x2.cuda())
-        y = Variable(y.cuda(), requires_grad=False)
+        x1 = Variable(x1.cuda() if use_gpu else x1)
+        x2 = Variable(x2.cuda() if use_gpu else x2)
+        y = Variable(y.cuda() if use_gpu else y, requires_grad=False)
         output = model(x1, x2)
         loss = criterion(output, y)
         running_loss += loss.data[0]
