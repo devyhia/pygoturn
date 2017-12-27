@@ -23,17 +23,19 @@ parser.add_argument('-lr', '--learning-rate', default=1e-6, type=float, help='in
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
 parser.add_argument('-dir', '--save-directory', default='../checkpoints/', type=str, help='path to save directory')
 parser.add_argument('-r', '--resume', default=None, type=str, help='path to resume from')
+parser.add_argument('-pr', '--print', default=1, type=int, help='print every x amount')
 
 def main():
-
+    global args
     args = parser.parse_args()
+
     print(args)
     # load dataset
     transform = transforms.Compose([Normalize(), ToTensor()])
     alov = datasets.ALOVDataset('../ALOV/Frames/',
                                 '../ALOV/GT/',
                                 transform)
-    dataloader = DataLoader(alov, batch_size=args.batch_size, shuffle=True, num_workers=4)
+    dataloader = DataLoader(alov, batch_size=args.batch_size, shuffle=True, num_workers=8)
 
     # load model
     net = model.GoNet()
@@ -60,6 +62,8 @@ def train_model(model, dataloader, criterion, optimizer, num_epochs, lr, save_di
     dataset_size = dataloader.dataset.len
 
     for epoch in range(num_epochs):
+        since_epoch = time.time()
+        since_batch = time.time()
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
         print('-' * 10)
         model.train()
@@ -91,16 +95,21 @@ def train_model(model, dataloader, criterion, optimizer, num_epochs, lr, save_di
             optimizer.step()
 
             # statistics
-            print('[training] epoch = %d, i = %d, loss = %f' % (epoch, i, loss.data[0]))
+            if i % args.print == 0:
+                runtime = time.time() - since_batch
+                print('[training] epoch = %d, i = %d, loss = %f, running_loss = %f, runtime= %dm %ds' % (epoch, i, loss.data[0], running_loss / (i+1), runtime / 60, runtime % 60))
+                since_batch = time.time()
             i = i + 1
             running_loss += loss.data[0]
 
         epoch_loss = running_loss / dataset_size
-        print('Loss: {:.4f}'.format(epoch_loss))
+        runtime = time.time() - since_epoch
+        print('+++ Epoch Loss: {:.4f} - Runtime: {:.0f}m {:.0f}s'.format(epoch_loss, runtime / 60, runtime % 60))
         val_loss = evaluate(model, dataloader, criterion, epoch)
-        print('Validation Loss: {:.4f}'.format(val_loss))
+        print('+++ Validation Loss: {:.4f}'.format(val_loss))
         path = save_dir + 'model_n_epoch_' + str(epoch) + '_loss_' + str(round(epoch_loss, 3)) + '.pth'
         torch.save(model.state_dict(), path)
+        since_epoch = time.time()
 
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(
