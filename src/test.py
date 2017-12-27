@@ -2,18 +2,20 @@
 import os
 import time
 import copy
-import datasets
+from . import datasets
 import argparse
-import model
+from . import model
 import torch
 from torch.autograd import Variable
 from torchvision import transforms
-from helper import ToTensor, Normalize, show_batch
+from .helper import ToTensor, Normalize, show_batch
 import torch.optim as optim
 import numpy as np
-from helper import *
-from get_bbox import *
-
+from .helper import *
+from .get_bbox import *
+from torch.utils.data import Dataset
+from matplotlib import animation, rc
+from PIL import Image, ImageDraw
 
 use_gpu = torch.cuda.is_available()
 parser = argparse.ArgumentParser(description='GOTURN Training')
@@ -21,9 +23,9 @@ parser.add_argument('-weights', '--model-weights', default='../saved_checkpoints
 parser.add_argument('-save', '--save-directory', default='', type=str, help='path to save directory')
 parser.add_argument('-data', '--data-directory', default='../data/alov300/imagedata++/02-SurfaceCover/02-SurfaceCover_video00002', type=str, help='path to video frames')
 
-class Tester:
+class Tester(Dataset):
     """Test Dataset for Tester"""
-    def __init__(self, root_dir, model_path, save_dir=None):
+    def __init__(self, root_dir, model_path, init_box=None, save_dir=None):
         self.root_dir = root_dir
         self.transform = transforms.Compose([Normalize(), ToTensor()])
         self.model_path = model_path
@@ -37,13 +39,12 @@ class Tester:
         frames = np.array(frames)
         frames.sort()
         self.x = []
-        for i in xrange(self.len):
+        for i in range(self.len):
             self.x.append([frames[i], frames[i+1]])
         self.x = np.array(self.x)
         # code for previous rectange
-        init_bbox = bbox_coordinates(self.x[0][0])
-        print init_bbox
-        self.prev_rect = init_bbox  
+        self.init_bbox = bbox_coordinates(self.x[0][0]) if init_box is None else init_box
+        self.prev_rect = self.init_bbox  
 
 
     def __getitem__(self, idx):
@@ -56,20 +57,23 @@ class Tester:
         prevbb = self.prev_rect
         # Crop previous image with height and width twice the prev bounding box height and width
         # Scale the cropped image to (227,227,3)
-        crop = CropPrev(128)
+        crop_prev = CropPrev(128)
+        # crop_curr = CropCurr(128)
         scale = Rescale((227,227))
-        transform = transforms.Compose([crop_prev, scale])
-        prev_img = transform({'image':prev, 'bb':prevbb})['image']
+        transform_prev = transforms.Compose([crop_prev, scale])
+        # transform_curr = transforms.Compose([crop_curr, scale])
+        prev_img = transform_prev({'image':prev, 'bb':prevbb})['image']
         # Crop current image with height and width twice the prev bounding box height and width
         # Scale the cropped image to (227,227,3)
-        curr_img = transform({'image':curr, 'prevbb':prevbb})['image']
-        sample = {'previmg': prev_img, 'currimg': curr_img}
+        curr_img = transform_prev({'image':curr, 'bb':prevbb})['image']
+        sample = {'previmg': prev_img, 'currimg': curr_img, 'currbb': prevbb }
         return sample
 
     def get_rect(self, sample):
         x1, x2 = sample['previmg'], sample['currimg']
         x1 = x1[None,:,:,:]
         x2 = x2[None,:,:,:]
+        x1,x2 = Variable(x1), Variable(x2)
         y = self.model(x1, x2)
         bb = y.data.cpu().numpy().transpose((1,0))
         bb = bb[:,0]
@@ -88,25 +92,57 @@ class Tester:
         # uncrop
         bb = np.array([bb[0]+left, bb[1]+top, bb[2]+left, bb[3]+top])
         return bb
+    
+    def animated_test(self):
+        self.prev_rect = self.init_bbox
+        
+        fig, ax = plt.subplots()
+        
+        im = io.imread(self.x[0][1])
+        self.anim_im = ax.imshow(im, animated=True)
+        self.anim_idx = 1
+        self.anim_fig = fig
+        self.anim_ax = ax
+        
+        ani = animation.FuncAnimation(fig, self.test, interval=1, frames=3, blit=False)
+        
+        return ani
 
-    def test(self):
+    def test(self, *args):
         # show initial image with rectange
-        fig,ax = plt.subplots(1)
-        for i in xrange(self.len):
-            sample = self[i]
-            bb = self.get_rect(sample)
-            # show rectangle
-            im = io.imread(self.x[i][1])
-            ax.clear()
-            ax.imshow(im)
-            rect = patches.Rectangle((bb[0], bb[1]),bb[2]-bb[0],bb[3]-bb[1],linewidth=1,edgecolor='r',facecolor='none')
-            ax.add_patch(rect)
-            self.prev_rect = bb
-        plt.show()
+        i = self.anim_idx
+        
+        print('Testing frame # {}'.format(i))
+        
+        sample = self[i]
+        bb = self.get_rect(sample)
+        
+        im = Image.open(self.x[i][1])
+        draw = ImageDraw.Draw(im)
+        
+        cor = bb.tolist() # (x1,y1, x2,y2)
+        line = (cor[0],cor[1],cor[0],cor[3])
+        draw.line(line, fill="red", width=5)
+        line = (cor[0],cor[1],cor[2],cor[1])
+        draw.line(line, fill="red", width=5)
+        line = (cor[0],cor[3],cor[2],cor[3])
+        draw.line(line, fill="red", width=5)
+        line = (cor[2],cor[1],cor[2],cor[3])
+        draw.line(line, fill="red", width=5)
+        
+        # draw.rectangle(, outline='red')
+        
+        del draw
+        
+        self.anim_im.set_array(np.array(im))
+        
+        self.prev_rect = bb
+        self.anim_idx += 1
+        
 
 def main():
     args = parser.parse_args()
-    print args
+    print(args)
     tester = Tester(args.data_directory, args.model_weights, args.save_directory)
     #tester.test()
 

@@ -7,7 +7,7 @@ import matplotlib.patches as patches
 from skimage import io, transform
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
-from helper import *
+from .helper import *
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -62,6 +62,9 @@ class ALOVDataset(Dataset):
         curr = io.imread(self.x[idx][1])
         prevbb = self.get_bb(self.y[idx][0]) 
         currbb = self.get_bb(self.y[idx][1])
+        
+        #rint('prevbb: ', prevbb)
+        #print('currbb: ', currbb)
         # Crop previous image with height and width twice the prev bounding box height and width
         # Scale the cropped image to (227,227,3)
         crop_prev = CropPrev(128)

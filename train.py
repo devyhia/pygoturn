@@ -2,13 +2,13 @@
 import os
 import time
 import copy
-import datasets
+from src import datasets
 import argparse
-import model
+from src import model
 import torch
 from torch.autograd import Variable
 from torchvision import transforms
-from helper import ToTensor, Normalize, show_batch
+from src.helper import ToTensor, Normalize, show_batch
 from torch.utils.data import DataLoader
 import torch.optim as optim
 import numpy as np
@@ -22,6 +22,7 @@ parser.add_argument('-b', '--batch-size', default=1, type=int, help='mini-batch 
 parser.add_argument('-lr', '--learning-rate', default=1e-6, type=float, help='initial learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
 parser.add_argument('-dir', '--save-directory', default='../checkpoints/', type=str, help='path to save directory')
+parser.add_argument('-r', '--resume', default=None, type=str, help='path to resume from')
 
 def main():
 
@@ -29,13 +30,18 @@ def main():
     print(args)
     # load dataset
     transform = transforms.Compose([Normalize(), ToTensor()])
-    alov = datasets.ALOVDataset('../../ALOV/Frames/',
-                                '../../ALOV/GT/',
+    alov = datasets.ALOVDataset('../ALOV/Frames/',
+                                '../ALOV/GT/',
                                 transform)
     dataloader = DataLoader(alov, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     # load model
     net = model.GoNet()
+    if args.resume:
+        print("=> loading checkpoint '{}'".format(args.resume))
+        checkpoint = torch.load(args.resume)
+        net.load_state_dict(checkpoint)
+
     loss_fn = torch.nn.L1Loss(size_average = False)
     if use_gpu:
         net = net.cuda()

@@ -124,6 +124,23 @@ class ToTensor(object):
                 'currbb': torch.from_numpy(currbb).float()
                 }
 
+    
+class FromTensor(object):
+    """Convert Tensors to 2d arrays."""
+
+    def __call__(self, sample):
+        prev_img, curr_img, currbb = sample['previmg'], sample['currimg'], sample['currbb']
+        # swap color axis because
+        # numpy image: H x W x C
+        # torch image: C X H X W
+        prev_img = prev_img.numpy().transpose((1, 2, 0))
+        curr_img = curr_img.numpy().transpose((1, 2, 0))
+        return {'previmg': prev_img,
+                'currimg': curr_img,
+                'currbb': currbb.numpy()
+                }
+
+    
 class Normalize(object):
     """Returns image with zero mean and scales bounding box by factor of 10."""
 
@@ -134,7 +151,7 @@ class Normalize(object):
         curr_img = curr_img.astype(float)
         prev_img -= np.array(self.mean).astype(float)
         curr_img -= np.array(self.mean).astype(float)
-        currbb /= 10;
+        currbb = currbb / 10;
         return {'previmg': prev_img,
                 'currimg': curr_img,
                 'currbb': currbb
@@ -155,9 +172,10 @@ def show_batch(sample_batched):
     axarr[0].set_title('Previous frame images')
     axarr[1].imshow(grid2.numpy().transpose((1, 2, 0)))
     axarr[1].set_title('Current frame images with bounding boxes')
-    for i in range(batch_size):
-        bb = currbb_batch[i]
-        bb = bb.numpy()
-        rect = patches.Rectangle((bb[0]+i*im_size, bb[1]),bb[2]-bb[0],bb[3]-bb[1],linewidth=1,edgecolor='r',facecolor='none')
-        axarr[1].add_patch(rect)
+    # for i in range(batch_size):
+    bb = currbb_batch
+    bb = bb.numpy()
+    rect = patches.Rectangle((10*bb[0], 10*bb[1]), 10* (bb[2]-bb[0]), 10*(bb[3]-bb[1]), linewidth=1,edgecolor='r',facecolor='none')
+    axarr[1].add_patch(rect)
+    plt.tight_layout()
     plt.show()
