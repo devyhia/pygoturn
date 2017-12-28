@@ -16,14 +16,18 @@ import numpy as np
 # constants
 use_gpu = torch.cuda.is_available()
 
+if use_gpu:
+    print('==> GPU is available :)')
+
 parser = argparse.ArgumentParser(description='GOTURN Training')
 parser.add_argument('-n', '--epochs', default=100, type=int, help='number of total epochs to run')
+parser.add_argument('-fep', '--from-epoch', default=0, type=int, help='starts the sprint from which epoch')
 parser.add_argument('-b', '--batch-size', default=1, type=int, help='mini-batch size (default: 1)')
 parser.add_argument('-lr', '--learning-rate', default=1e-6, type=float, help='initial learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
 parser.add_argument('-dir', '--save-directory', default='../checkpoints/', type=str, help='path to save directory')
 parser.add_argument('-r', '--resume', default=None, type=str, help='path to resume from')
-parser.add_argument('-pr', '--print', default=1, type=int, help='print every x amount')
+parser.add_argument('-pr', '--print-every', default=1, type=int, help='print every x amount')
 
 def main():
     global args
@@ -61,7 +65,7 @@ def train_model(model, dataloader, criterion, optimizer, num_epochs, lr, save_di
     since = time.time()
     dataset_size = dataloader.dataset.len
 
-    for epoch in range(num_epochs):
+    for epoch in range(args.from_epoch, num_epochs):
         since_epoch = time.time()
         since_batch = time.time()
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
@@ -95,7 +99,7 @@ def train_model(model, dataloader, criterion, optimizer, num_epochs, lr, save_di
             optimizer.step()
 
             # statistics
-            if i % args.print == 0:
+            if i % args.print_every == 0:
                 runtime = time.time() - since_batch
                 print('[training] epoch = %d, i = %d, loss = %f, running_loss = %f, runtime= %dm %ds' % (epoch, i, loss.data[0], running_loss / (i+1), runtime / 60, runtime % 60))
                 since_batch = time.time()
