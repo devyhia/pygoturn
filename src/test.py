@@ -30,9 +30,10 @@ class Tester(Dataset):
         self.transform = transforms.Compose([Normalize(), ToTensor()])
         self.model_path = model_path
         self.model = model.GoNet()
+        self.model.eval()       # Turn on testing mode!
         if use_gpu:
             self.model = self.model.cuda()
-        self.model.load_state_dict(torch.load(model_path))
+            self.model.load_state_dict(torch.load(model_path, map_location=lambda storage, loc: storage))
         frames = os.listdir(root_dir)
         self.len = len(frames)-1
         frames = [root_dir + "/" + frame for frame in frames]
@@ -44,7 +45,7 @@ class Tester(Dataset):
         self.x = np.array(self.x)
         # code for previous rectange
         self.init_bbox = bbox_coordinates(self.x[0][0]) if init_box is None else init_box
-        self.prev_rect = self.init_bbox  
+        self.prev_rect = self.init_bbox
 
 
     def __getitem__(self, idx):
@@ -76,6 +77,8 @@ class Tester(Dataset):
         x1,x2 = Variable(x1), Variable(x2)
         y = self.model(x1, x2)
         bb = y.data.cpu().numpy().transpose((1,0))
+        print('Sample: ', sample)
+        print('Pred. BBox: ', bb)
         bb = bb[:,0]
         bb = bb*10
         prevbb = self.prev_rect
@@ -89,37 +92,39 @@ class Tester(Dataset):
         bb = np.array([bb[0]*new_w/ww, bb[1]*new_h/hh, bb[2]*new_w/ww, bb[3]*new_h/hh])
         left = prevbb[0]-w/2
         top = prevbb[1]-h/2
+        print('Unscaled BBox: ', bb)
         # uncrop
         bb = np.array([bb[0]+left, bb[1]+top, bb[2]+left, bb[3]+top])
+        print('Uncropped BBox: ', bb)
         return bb
-    
+
     def animated_test(self):
         self.prev_rect = self.init_bbox
-        
+
         fig, ax = plt.subplots()
-        
+
         im = io.imread(self.x[0][1])
         self.anim_im = ax.imshow(im, animated=True)
         self.anim_idx = 1
         self.anim_fig = fig
         self.anim_ax = ax
-        
+
         ani = animation.FuncAnimation(fig, self.test, interval=1, frames=3, blit=False)
-        
+
         return ani
 
-    def test(self, *args):
+    def test(self, animated=True, *args):
         # show initial image with rectange
         i = self.anim_idx
-        
+
         print('Testing frame # {}'.format(i))
-        
+
         sample = self[i]
         bb = self.get_rect(sample)
-        
+
         im = Image.open(self.x[i][1])
         draw = ImageDraw.Draw(im)
-        
+
         cor = bb.tolist() # (x1,y1, x2,y2)
         line = (cor[0],cor[1],cor[0],cor[3])
         draw.line(line, fill="red", width=5)
@@ -129,16 +134,17 @@ class Tester(Dataset):
         draw.line(line, fill="red", width=5)
         line = (cor[2],cor[1],cor[2],cor[3])
         draw.line(line, fill="red", width=5)
-        
         # draw.rectangle(, outline='red')
-        
         del draw
-        
-        self.anim_im.set_array(np.array(im))
-        
+
+        if animated:
+            self.anim_im.set_array(np.array(im))
+
         self.prev_rect = bb
         self.anim_idx += 1
-        
+
+        return im
+
 
 def main():
     args = parser.parse_args()
