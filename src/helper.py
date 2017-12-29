@@ -33,9 +33,10 @@ class Rescale(object):
             new_h, new_w = self.output_size
 
         new_h, new_w = int(new_h), int(new_w)
+        # Rescale Image to new size
         img = transform.resize(image, (new_h, new_w))
         img = img_as_ubyte(img)
-        # complete from here
+        # Rescale bounding box into the new size
         bb = [bb[0]*new_w/w, bb[1]*new_h/h, bb[2]*new_w/w, bb[3]*new_h/h]
         return {'image': img, 'bb':bb}
 
@@ -61,12 +62,21 @@ class CropPrev(object):
         if (len(image.shape) == 2):
             image = np.repeat(image[...,None],3,axis=2)
         im = Image.fromarray(image)
+
+        # Get width and height of the bounding box
         w = bb[2]-bb[0]
         h = bb[3]-bb[1]
-        left = bb[0]-w/2
-        top = bb[1]-h/2
-        right = left + 2*w
-        bottom = top + 2*h
+
+        # Get width and heigh of the image
+        img_h, img_w = image.shape[:2]
+
+        # Expand the bounding box to include more context (i.e. double the size)
+        left = min(0, bb[0]-w/2)
+        top = min(0, bb[1]-h/2)
+        right = max(img_w, left + 2*w)
+        bottom = max(img_h, top + 2*h)
+
+        # Now, we crop the image with the context (i.e. double the bbox size)
         box = (left, top, right, bottom)
         box = tuple([int(math.floor(x)) for x in box])
         res = np.array(im.crop(box))
@@ -95,12 +105,22 @@ class CropCurr(object):
         if (len(image.shape) == 2):
             image = np.repeat(image[...,None],3,axis=2)
         im = Image.fromarray(image)
+
+        # Get width and height of the current bounding box
         w = prevbb[2]-prevbb[0]
         h = prevbb[3]-prevbb[1]
-        left = prevbb[0]-w/2
-        top = prevbb[1]-h/2
-        right = left + 2*w
-        bottom = top + 2*h
+
+        # Get width and height of the original image
+        img_h, img_w = image.shape[:2]
+
+        # Expand the bounding box by a factor of 2 with keeping its center
+        left = max(0, prevbb[0]-w/2)
+        top = max(0, prevbb[1]-h/2)
+        right = min(img_w, left + 2*w)
+        bottom = min(img_h, top + 2*h)
+
+        # This box now is 2 times as big as the original bounding box and it
+        # and is called the context box (i.e. it captures changes in the tracked object).
         box = (left, top, right, bottom)
         box = tuple([int(math.floor(x)) for x in box])
         res = np.array(im.crop(box))
@@ -150,7 +170,10 @@ class Normalize(object):
         curr_img = curr_img.astype(float)
         prev_img -= np.array(self.mean).astype(float)
         curr_img -= np.array(self.mean).astype(float)
+
+        # BBox Scaling Factor
         currbb = currbb / 10;
+
         return {'previmg': prev_img,
                 'currimg': curr_img,
                 'currbb': currbb
