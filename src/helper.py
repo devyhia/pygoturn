@@ -16,7 +16,6 @@ class Rescale(object):
     Args:
         output_size (tuple or int): Desired output size. If int, square crop
             is made.
-    
     """
     def __init__(self, output_size):
         assert isinstance(output_size, (int, tuple))
@@ -124,7 +123,7 @@ class ToTensor(object):
                 'currbb': torch.from_numpy(currbb).float()
                 }
 
-    
+
 class FromTensor(object):
     """Convert Tensors to 2d arrays."""
 
@@ -140,7 +139,7 @@ class FromTensor(object):
                 'currbb': currbb.numpy()
                 }
 
-    
+
 class Normalize(object):
     """Returns image with zero mean and scales bounding box by factor of 10."""
 
@@ -175,7 +174,7 @@ def show_batch(sample_batched):
     # for i in range(batch_size):
     bb = currbb_batch
     bb = bb.numpy()
-    rect = patches.Rectangle((10*bb[0], 10*bb[1]), 10* (bb[2]-bb[0]), 10*(bb[3]-bb[1]), linewidth=1,edgecolor='r',facecolor='none')
+    rect = patches.Rectangle((10*bb[0], 10*bb[1]), 10* (bb[2]-bb[0]), 10*(bb[3]-bb[1]), linewidth=2,edgecolor='r',facecolor='none')
     axarr[1].add_patch(rect)
     plt.tight_layout()
     plt.show()
