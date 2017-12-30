@@ -22,9 +22,9 @@ class ALOVDataset(Dataset):
         self.x = []
         self.transform = transform
         envs = os.listdir(target_dir)
-        for env in envs:
+        for env in envs[:1]:
             env_videos = os.listdir(root_dir + env)
-            for vid in env_videos:
+            for vid in env_videos[:1]:
                 vid_src = self.root_dir + env + "/" + vid
                 vid_ann = self.target_dir + env + "/" + vid + ".ann"
                 frames = os.listdir(vid_src)
@@ -67,8 +67,8 @@ class ALOVDataset(Dataset):
         #print('currbb: ', currbb)
         # Crop previous image with height and width twice the prev bounding box height and width
         # Scale the cropped image to (227,227,3)
-        crop_prev = CropPrev(128)
-        crop_curr = CropCurr(128)
+        crop_prev = CropPrev()
+        crop_curr = CropCurr()
         scale = Rescale((227,227))
         transform_prev = transforms.Compose([crop_prev, scale])
         prev_img = transform_prev({'image':prev, 'bb':prevbb})['image']
@@ -115,6 +115,7 @@ class ALOVDataset(Dataset):
         ax1.imshow(x['previmg'])
         ax2.imshow(x['currimg'])
         bb = x['currbb']
-        rect = patches.Rectangle((bb[0], bb[1]),bb[2]-bb[0],bb[3]-bb[1],linewidth=1,edgecolor='r',facecolor='none')
+        scale_ratio = 227. / 10.
+        rect = patches.Rectangle(scale_ratio * (bb[0], bb[1]), scale_ratio *(bb[2]-bb[0]), scale_ratio * (bb[3]-bb[1]), linewidth=1,edgecolor='r',facecolor='none')
         ax2.add_patch(rect)
         plt.show()

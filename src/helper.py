@@ -46,31 +46,31 @@ class CropPrev(object):
         output_size (tuple or int): Desired output size. If int, square crop
             is made.
     """
-    def __init__(self, output_size):
-        assert isinstance(output_size, (int, tuple))
-        if isinstance(output_size, int):
-            self.output_size = (output_size, output_size)
-        else:
-            assert len(output_size) == 2
-            self.output_size = output_size
-
-
     def __call__(self, sample):
         image, bb = sample['image'], sample['bb']
         image = img_as_ubyte(image)
         if (len(image.shape) == 2):
             image = np.repeat(image[...,None],3,axis=2)
         im = Image.fromarray(image)
+
+        # Width & Height of New Context
         w = bb[2]-bb[0]
         h = bb[3]-bb[1]
+
+        # New Context (i.e. double the bounding box)
         left = bb[0]-w/2
         top = bb[1]-h/2
         right = left + 2*w
         bottom = top + 2*h
+
+        # Now, we crop the image with the context
         box = (left, top, right, bottom)
         box = tuple([int(math.floor(x)) for x in box])
         res = np.array(im.crop(box))
+
+        # Now, we re-center the bounding box based on the new context
         bb = [bb[0]-left, bb[1]-top, bb[2]-left, bb[3]-top]
+
         return {'image':res, 'bb':bb}
 
 class CropCurr(object):
@@ -80,31 +80,32 @@ class CropCurr(object):
         output_size (tuple or int): Desired output size. If int, square crop
             is made.
     """
-    def __init__(self, output_size):
-        assert isinstance(output_size, (int, tuple))
-        if isinstance(output_size, int):
-            self.output_size = (output_size, output_size)
-        else:
-            assert len(output_size) == 2
-            self.output_size = output_size
-
-
     def __call__(self, sample):
         image, prevbb, currbb = sample['image'], sample['prevbb'], sample['currbb']
         image = img_as_ubyte(image)
         if (len(image.shape) == 2):
             image = np.repeat(image[...,None],3,axis=2)
         im = Image.fromarray(image)
+
+        # Width & Height of the bounding box
         w = prevbb[2]-prevbb[0]
         h = prevbb[3]-prevbb[1]
+
+        # Get the coordinates of the new context (i.e. double the bounding box of previous frame)
         left = prevbb[0]-w/2
         top = prevbb[1]-h/2
         right = left + 2*w
         bottom = top + 2*h
+
+        # Crop the image to get only the context (area of interest)
         box = (left, top, right, bottom)
         box = tuple([int(math.floor(x)) for x in box])
         res = np.array(im.crop(box))
+
+        # Now, we recenter the current bounding box (the one to be regressed)
+        # based on the prev. bounding box (the given bounding box)
         bb = [currbb[0]-left, currbb[1]-top, currbb[2]-left, currbb[3]-top]
+
         return {'image':res, 'bb':bb}
 
 
@@ -141,7 +142,7 @@ class FromTensor(object):
 
 
 class Normalize(object):
-    """Returns image with zero mean and scales bounding box by factor of 10."""
+    """Returns image with zero mean and scales bounding box by factor of 10/227."""
 
     def __call__(self, sample):
         prev_img, curr_img, currbb = sample['previmg'], sample['currimg'], sample['currbb']
@@ -150,7 +151,9 @@ class Normalize(object):
         curr_img = curr_img.astype(float)
         prev_img -= np.array(self.mean).astype(float)
         curr_img -= np.array(self.mean).astype(float)
-        currbb = currbb / 10;
+        #print('Curr BBox: ', currbb)
+        scale_ratio = 10. / 227.
+        currbb = scale_ratio * np.array(currbb);
         return {'previmg': prev_img,
                 'currimg': curr_img,
                 'currbb': currbb
@@ -174,7 +177,8 @@ def show_batch(sample_batched):
     # for i in range(batch_size):
     bb = currbb_batch
     bb = bb.numpy()
-    rect = patches.Rectangle((10*bb[0], 10*bb[1]), 10* (bb[2]-bb[0]), 10*(bb[3]-bb[1]), linewidth=2,edgecolor='r',facecolor='none')
+    scale_ratio = 227. / 10.
+    rect = patches.Rectangle((scale_ratio * bb[0], scale_ratio * bb[1]), scale_ratio * (bb[2]-bb[0]), scale_ratio * (bb[3]-bb[1]), linewidth=2,edgecolor='r',facecolor='none')
     axarr[1].add_patch(rect)
     plt.tight_layout()
     plt.show()
