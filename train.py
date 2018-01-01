@@ -31,6 +31,7 @@ parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
 parser.add_argument('-dir', '--save-directory', default='../checkpoints/', type=str, help='path to save directory')
 parser.add_argument('-r', '--resume', default=None, type=str, help='path to resume from')
 parser.add_argument('-pr', '--print-every', default=1, type=int, help='print every x amount')
+parser.add_argument('-vis', '--visualize-every', default=50, type=int, help='visualize the results in visdom every how many iterations?')
 
 def main():
     global args
@@ -102,29 +103,33 @@ def train_model(model, dataloader, criterion, optimizer, num_epochs, lr, save_di
             output = model(x1, x2)
             loss = criterion(output, y)
 
-            # Logging
-            vis.text("""
-                     Ground Truth: {} <br/>
-                     Prediction: {} <br/>
-                     Loss: {}
-                    """.format(y, output, loss.data[0]),
-                    win="Iteration__Text")
+            if i % args.visualize_every == 0:
+                # Logging
+                vis.text("""
+                         Ground Truth: {} <br/>
+                         Prediction: {} <br/>
+                         Loss: {}
+                        """.format(y, output, loss.data[0]),
+                        win="Iteration__Text")
 
-            # Visualization
-            search_image = data['currimg'].numpy()
-            search_image = search_image.reshape(search_image.shape[1:]).transpose((1,2,0))
-            search_image += [104, 117, 123]
-            search_image = search_image.astype(np.uint8)
+                # Visualization
+                search_image = data['currimg'].numpy()
+                search_image = search_image.reshape(search_image.shape[1:]).transpose((1,2,0))
+                search_image += [104, 117, 123]
+                search_image = search_image.astype(np.uint8)
 
-            search_image = Image.fromarray(search_image)
-            draw = ImageDraw.Draw(search_image)
+                search_image = Image.fromarray(search_image)
+                draw = ImageDraw.Draw(search_image)
 
-            draw.rectangle(unscale_ratio * y.data.numpy(), outline='green')
-            draw.rectangle(unscale_ratio * output.data.numpy(), outline='red')
+                draw.rectangle(unscale_ratio * y.data.cpu().numpy(), outline='green')
+                draw.rectangle(unscale_ratio * output.data.cpu().numpy(), outline='red')
 
-            del draw
+                del draw
 
-            vis.image(np.array(search_image).transpose(2, 0, 1), win="Iteration__Image")
+                vis.image(np.array(search_image).transpose(2, 0, 1), win="Iteration__Image", opts=dict(
+                    caption='Ep. {} Itr. {} / {}'.format(epoch, i, total_i)
+                ))
+
             # backward + optimize
             loss.backward()
             optimizer.step()
@@ -190,8 +195,8 @@ def evaluate(model, dataloader, criterion, epoch):
         search_image = Image.fromarray(search_image)
         draw = ImageDraw.Draw(search_image)
 
-        draw.rectangle(unscale_ratio * y.data.numpy(), outline='green')
-        draw.rectangle(unscale_ratio * output.data.numpy(), outline='red')
+        draw.rectangle(unscale_ratio * y.data.cpu().numpy(), outline='green')
+        draw.rectangle(unscale_ratio * output.data.cpu().numpy(), outline='red')
 
         del draw
 
