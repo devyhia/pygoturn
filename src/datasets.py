@@ -22,9 +22,9 @@ class ALOVDataset(Dataset):
         self.x = []
         self.transform = transform
         envs = os.listdir(target_dir)
-        for env in envs[:1]:
+        for env in envs:
             env_videos = os.listdir(root_dir + env)
-            for vid in env_videos[:1]:
+            for vid in env_videos:
                 vid_src = self.root_dir + env + "/" + vid
                 vid_ann = self.target_dir + env + "/" + vid + ".ann"
                 frames = os.listdir(vid_src)
