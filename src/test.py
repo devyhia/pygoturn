@@ -8,7 +8,7 @@ from . import model
 import torch
 from torch.autograd import Variable
 from torchvision import transforms
-from .helper import ToTensor, Normalize, show_batch
+from .helper import ToTensor, Normalize, show_batch, scale_ratio, unscale_ratio
 import torch.optim as optim
 import numpy as np
 from .helper import *
@@ -30,10 +30,13 @@ class Tester(Dataset):
         self.transform = transforms.Compose([Normalize(), ToTensor()])
         self.model_path = model_path
         self.model = model.GoNet()
-        self.model.eval()       # Turn on testing mode!
+
         if use_gpu:
             self.model = self.model.cuda()
-            self.model.load_state_dict(torch.load(model_path, map_location=lambda storage, loc: storage))
+
+        state = torch.load(model_path)
+        self.model.load_state_dict(state)
+
         frames = os.listdir(root_dir)
         self.len = len(frames)-1
         frames = [root_dir + "/" + frame for frame in frames]
@@ -58,16 +61,16 @@ class Tester(Dataset):
         prevbb = self.prev_rect
         # Crop previous image with height and width twice the prev bounding box height and width
         # Scale the cropped image to (227,227,3)
-        crop_prev = CropPrev(128)
-        # crop_curr = CropCurr(128)
+        crop_prev = CropPrev()
+        # crop_curr = CropCurr()
         scale = Rescale((227,227))
         transform_prev = transforms.Compose([crop_prev, scale])
         # transform_curr = transforms.Compose([crop_curr, scale])
-        prev_img = transform_prev({'image':prev, 'bb':prevbb})['image']
+        prev_img = transform_prev({'image':prev, 'bb':prevbb})
         # Crop current image with height and width twice the prev bounding box height and width
         # Scale the cropped image to (227,227,3)
         curr_img = transform_prev({'image':curr, 'bb':prevbb})['image']
-        sample = {'previmg': prev_img, 'currimg': curr_img, 'currbb': prevbb }
+        sample = {'previmg': prev_img['image'], 'currimg': curr_img, 'currbb': prev_img['bb'] }
         return sample
 
     def get_rect(self, sample):
@@ -76,11 +79,13 @@ class Tester(Dataset):
         x2 = x2[None,:,:,:]
         x1,x2 = Variable(x1), Variable(x2)
         y = self.model(x1, x2)
-        bb = y.data.cpu().numpy().transpose((1,0))
-        print('Sample: ', sample)
-        print('Pred. BBox: ', bb)
+        #print('y: ', y)
+        bb = y.data.numpy().transpose((1,0))
+        #print('Sample: ', sample)
+        #print('Pred. BBox: ', bb)
+        # Undo Normalize (from 0..10 to 0..227)
         bb = bb[:,0]
-        bb = bb*10
+        bb = bb* unscale_ratio
         prevbb = self.prev_rect
         w = prevbb[2]-prevbb[0]
         h = prevbb[3]-prevbb[1]
@@ -88,14 +93,20 @@ class Tester(Dataset):
         new_h = 2*h
         ww = 227
         hh = 227
-        # unscale
-        bb = np.array([bb[0]*new_w/ww, bb[1]*new_h/hh, bb[2]*new_w/ww, bb[3]*new_h/hh])
+        # BBox Width & Height Scaling
+        bb = np.array([
+            bb[0]*new_w/ww,
+            bb[1]*new_h/hh,
+            bb[2]*new_w/ww,
+            bb[3]*new_h/hh
+        ])
+
         left = prevbb[0]-w/2
         top = prevbb[1]-h/2
-        print('Unscaled BBox: ', bb)
+        #print('Unscaled BBox: ', bb)
         # uncrop
         bb = np.array([bb[0]+left, bb[1]+top, bb[2]+left, bb[3]+top])
-        print('Uncropped BBox: ', bb)
+        #print('Uncropped BBox: ', bb)
         return bb
 
     def animated_test(self):
@@ -109,7 +120,7 @@ class Tester(Dataset):
         self.anim_fig = fig
         self.anim_ax = ax
 
-        ani = animation.FuncAnimation(fig, self.test, interval=1, frames=3, blit=False)
+        ani = animation.FuncAnimation(fig, self.test, interval=1, frames=10, blit=False)
 
         return ani
 

@@ -1,4 +1,4 @@
-# necessary imports
+# necessary imp rts
 import os
 import time
 import copy
@@ -8,11 +8,14 @@ from src import model
 import torch
 from torch.autograd import Variable
 from torchvision import transforms
-from src.helper import ToTensor, Normalize, show_batch
+from src.helper import ToTensor, Normalize, show_batch, scale_ratio, unscale_ratio
 from torch.utils.data import DataLoader
 import torch.optim as optim
 import numpy as np
+from visdom import Visdom
+from PIL import Image, ImageDraw
 
+vis = Visdom()
 # constants
 use_gpu = torch.cuda.is_available()
 
@@ -39,20 +42,21 @@ def main():
     alov = datasets.ALOVDataset('../ALOV/Frames/',
                                 '../ALOV/GT/',
                                 transform)
-    dataloader = DataLoader(alov, batch_size=args.batch_size, shuffle=True, num_workers=8)
+    dataloader = DataLoader(alov, batch_size=args.batch_size, shuffle=True)
 
     # load model
     net = model.GoNet()
     if args.resume:
         print("=> loading checkpoint '{}'".format(args.resume))
-        checkpoint = torch.load(args.resume)
+        checkpoint = torch.load(args.resume, map_location=lambda storage, loc: storage)
         net.load_state_dict(checkpoint)
 
     loss_fn = torch.nn.L1Loss(size_average = False)
     if use_gpu:
         net = net.cuda()
         loss_fn = loss_fn.cuda()
-    optimizer = optim.SGD(net.classifier.parameters(), lr=args.learning_rate, momentum=args.momentum)
+    optimizer = optim.Adam(net.classifier.parameters(), lr=args.learning_rate)  # 
+
     if os.path.exists(args.save_directory):
         print('Directory %s already exists' % (args.save_directory))
     else:
@@ -64,6 +68,9 @@ def main():
 def train_model(model, dataloader, criterion, optimizer, num_epochs, lr, save_dir):
     since = time.time()
     dataset_size = dataloader.dataset.len
+    best_loss = np.inf
+
+    loss_history = []
 
     for epoch in range(args.from_epoch, num_epochs):
         since_epoch = time.time()
@@ -75,6 +82,7 @@ def train_model(model, dataloader, criterion, optimizer, num_epochs, lr, save_di
         optimizer = exp_lr_scheduler(optimizer, epoch, lr)
         running_loss = 0.0
         i = 0
+        total_i = len(dataloader)
         # iterate over data
         for data in dataloader:
             # get the inputs and labels
@@ -94,6 +102,29 @@ def train_model(model, dataloader, criterion, optimizer, num_epochs, lr, save_di
             output = model(x1, x2)
             loss = criterion(output, y)
 
+            # Logging
+            vis.text("""
+                     Ground Truth: {} <br/>
+                     Prediction: {} <br/>
+                     Loss: {}
+                    """.format(y, output, loss.data[0]),
+                    win="Iteration__Text")
+
+            # Visualization
+            search_image = data['currimg'].numpy()
+            search_image = search_image.reshape(search_image.shape[1:]).transpose((1,2,0))
+            search_image += [104, 117, 123]
+            search_image = search_image.astype(np.uint8)
+
+            search_image = Image.fromarray(search_image)
+            draw = ImageDraw.Draw(search_image)
+
+            draw.rectangle(unscale_ratio * y.data.numpy(), outline='green')
+            draw.rectangle(unscale_ratio * output.data.numpy(), outline='red')
+
+            del draw
+
+            vis.image(np.array(search_image).transpose(2, 0, 1), win="Iteration__Image")
             # backward + optimize
             loss.backward()
             optimizer.step()
@@ -101,18 +132,32 @@ def train_model(model, dataloader, criterion, optimizer, num_epochs, lr, save_di
             # statistics
             if i % args.print_every == 0:
                 runtime = time.time() - since_batch
-                print('[training] epoch = %d, i = %d, loss = %f, running_loss = %f, runtime= %dm %ds' % (epoch, i, loss.data[0], running_loss / (i+1), runtime / 60, runtime % 60))
+                print('[training] epoch = %d, i = %d / %d, loss = %f, running_loss = %f, runtime= %dm %ds' % (epoch, i, total_i, loss.data[0], running_loss / (i+1), runtime / 60, runtime % 60))
                 since_batch = time.time()
             i = i + 1
             running_loss += loss.data[0]
+
 
         epoch_loss = running_loss / dataset_size
         runtime = time.time() - since_epoch
         print('+++ Epoch Loss: {:.4f} - Runtime: {:.0f}m {:.0f}s'.format(epoch_loss, runtime / 60, runtime % 60))
         val_loss = evaluate(model, dataloader, criterion, epoch)
         print('+++ Validation Loss: {:.4f}'.format(val_loss))
-        path = save_dir + 'model_n_epoch_' + str(epoch) + '_loss_' + str(round(epoch_loss, 3)) + '.pth'
-        torch.save(model.state_dict(), path)
+        path = save_dir + 'model_best_loss.pth'
+
+        loss_history += [[ epoch_loss, val_loss ]]
+        vis.line(
+            Y=np.array(loss_history),
+            win="Iteration__Loss",
+            opts=dict(
+                legend= ['Training Loss', 'Validation Loss']
+            )
+        )
+
+        if val_loss < best_loss:
+            best_loss = val_loss
+            torch.save(model.state_dict(), path)
+
         since_epoch = time.time()
 
     time_elapsed = time.time() - since
@@ -125,7 +170,7 @@ def evaluate(model, dataloader, criterion, epoch):
     dataset = dataloader.dataset
     running_loss = 0
     # test on a sample sequence from training set itself
-    for i in range(64):
+    for i in range(min(64, len(dataloader))):
         sample = dataset[i]
         sample['currimg'] = sample['currimg'][None,:,:,:]
         sample['previmg'] = sample['previmg'][None,:,:,:]
@@ -135,6 +180,23 @@ def evaluate(model, dataloader, criterion, epoch):
         x2 = Variable(x2.cuda() if use_gpu else x2)
         y = Variable(y.cuda() if use_gpu else y, requires_grad=False)
         output = model(x1, x2)
+
+        # Visualization
+        search_image = sample['currimg'].numpy()
+        search_image = search_image.reshape(search_image.shape[1:]).transpose((1,2,0))
+        search_image += [104, 117, 123]
+        search_image = search_image.astype(np.uint8)
+
+        search_image = Image.fromarray(search_image)
+        draw = ImageDraw.Draw(search_image)
+
+        draw.rectangle(unscale_ratio * y.data.numpy(), outline='green')
+        draw.rectangle(unscale_ratio * output.data.numpy(), outline='red')
+
+        del draw
+
+        vis.image(np.array(search_image).transpose(2, 0, 1), win="Iteration__ValidationImage", opts={ 'caption': "Validation Image # {}".format(i) })
+
         loss = criterion(output, y)
         running_loss += loss.data[0]
         print('[validation] epoch = %d, i = %d, loss = %f' % (epoch, i, loss.data[0]))

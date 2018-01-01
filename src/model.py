@@ -30,13 +30,13 @@ class GoNet(nn.Module):
         self.classifier = nn.Sequential(
                 nn.Linear(256*6*6*2, 4096),
                 nn.ReLU(inplace=True),
-                nn.Dropout(),
+                nn.Dropout(p=0.1),
                 nn.Linear(4096, 4096),
                 nn.ReLU(inplace=True),
-                nn.Dropout(),
+                nn.Dropout(p=0.1),
                 nn.Linear(4096,4096),
                 nn.ReLU(inplace=True),
-                nn.Dropout(),
+                nn.Dropout(p=0.1),
                 nn.Linear(4096, 4),
                 )
 
