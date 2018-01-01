@@ -115,7 +115,6 @@ class ALOVDataset(Dataset):
         ax1.imshow(x['previmg'])
         ax2.imshow(x['currimg'])
         bb = x['currbb']
-        scale_ratio = 227. / 10.
         rect = patches.Rectangle(scale_ratio * (bb[0], bb[1]), scale_ratio *(bb[2]-bb[0]), scale_ratio * (bb[3]-bb[1]), linewidth=1,edgecolor='r',facecolor='none')
         ax2.add_patch(rect)
         plt.show()

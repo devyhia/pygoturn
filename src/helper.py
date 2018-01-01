@@ -11,6 +11,9 @@ import warnings
 from PIL import Image
 warnings.filterwarnings("ignore")
 
+scale_ratio = 10. / 227.
+unscale_ratio = 1/ scale_ratio
+
 class Rescale(object):
     """Rescale image and bounding box.
     Args:
@@ -152,7 +155,6 @@ class Normalize(object):
         prev_img -= np.array(self.mean).astype(float)
         curr_img -= np.array(self.mean).astype(float)
         #print('Curr BBox: ', currbb)
-        scale_ratio = 10. / 227.
         currbb = scale_ratio * np.array(currbb);
         return {'previmg': prev_img,
                 'currimg': curr_img,
@@ -177,7 +179,6 @@ def show_batch(sample_batched):
     # for i in range(batch_size):
     bb = currbb_batch
     bb = bb.numpy()
-    scale_ratio = 227. / 10.
     rect = patches.Rectangle((scale_ratio * bb[0], scale_ratio * bb[1]), scale_ratio * (bb[2]-bb[0]), scale_ratio * (bb[3]-bb[1]), linewidth=2,edgecolor='r',facecolor='none')
     axarr[1].add_patch(rect)
     plt.tight_layout()

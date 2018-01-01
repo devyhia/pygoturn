@@ -8,7 +8,7 @@ from src import model
 import torch
 from torch.autograd import Variable
 from torchvision import transforms
-from src.helper import ToTensor, Normalize, show_batch
+from src.helper import ToTensor, Normalize, show_batch, scale_ratio, unscale_ratio
 from torch.utils.data import DataLoader
 import torch.optim as optim
 import numpy as np
@@ -42,7 +42,7 @@ def main():
     alov = datasets.ALOVDataset('../ALOV/Frames/',
                                 '../ALOV/GT/',
                                 transform)
-    dataloader = DataLoader(alov, batch_size=args.batch_size, shuffle=False)
+    dataloader = DataLoader(alov, batch_size=args.batch_size, shuffle=True)
 
     # load model
     net = model.GoNet()
@@ -55,7 +55,8 @@ def main():
     if use_gpu:
         net = net.cuda()
         loss_fn = loss_fn.cuda()
-    optimizer = optim.SGD(net.classifier.parameters(), lr=args.learning_rate, momentum=args.momentum)
+    optimizer = optim.Adam(net.classifier.parameters(), lr=args.learning_rate)  # 
+
     if os.path.exists(args.save_directory):
         print('Directory %s already exists' % (args.save_directory))
     else:
@@ -67,6 +68,9 @@ def main():
 def train_model(model, dataloader, criterion, optimizer, num_epochs, lr, save_dir):
     since = time.time()
     dataset_size = dataloader.dataset.len
+    best_loss = np.inf
+
+    loss_history = []
 
     for epoch in range(args.from_epoch, num_epochs):
         since_epoch = time.time()
@@ -115,8 +119,6 @@ def train_model(model, dataloader, criterion, optimizer, num_epochs, lr, save_di
             search_image = Image.fromarray(search_image)
             draw = ImageDraw.Draw(search_image)
 
-            unscale_ratio = 227. / 10.
-
             draw.rectangle(unscale_ratio * y.data.numpy(), outline='green')
             draw.rectangle(unscale_ratio * output.data.numpy(), outline='red')
 
@@ -135,15 +137,27 @@ def train_model(model, dataloader, criterion, optimizer, num_epochs, lr, save_di
             i = i + 1
             running_loss += loss.data[0]
 
-            raise "Yehya said stop here!"
 
         epoch_loss = running_loss / dataset_size
         runtime = time.time() - since_epoch
         print('+++ Epoch Loss: {:.4f} - Runtime: {:.0f}m {:.0f}s'.format(epoch_loss, runtime / 60, runtime % 60))
         val_loss = evaluate(model, dataloader, criterion, epoch)
         print('+++ Validation Loss: {:.4f}'.format(val_loss))
-        path = save_dir + 'model_n_epoch_' + str(epoch) + '_loss_' + str(round(epoch_loss, 3)) + '.pth'
-        torch.save(model.state_dict(), path)
+        path = save_dir + 'model_best_loss.pth'
+
+        loss_history += [[ epoch_loss, val_loss ]]
+        vis.line(
+            Y=np.array(loss_history),
+            win="Iteration__Loss",
+            opts=dict(
+                legend= ['Training Loss', 'Validation Loss']
+            )
+        )
+
+        if val_loss < best_loss:
+            best_loss = val_loss
+            torch.save(model.state_dict(), path)
+
         since_epoch = time.time()
 
     time_elapsed = time.time() - since
@@ -166,6 +180,23 @@ def evaluate(model, dataloader, criterion, epoch):
         x2 = Variable(x2.cuda() if use_gpu else x2)
         y = Variable(y.cuda() if use_gpu else y, requires_grad=False)
         output = model(x1, x2)
+
+        # Visualization
+        search_image = sample['currimg'].numpy()
+        search_image = search_image.reshape(search_image.shape[1:]).transpose((1,2,0))
+        search_image += [104, 117, 123]
+        search_image = search_image.astype(np.uint8)
+
+        search_image = Image.fromarray(search_image)
+        draw = ImageDraw.Draw(search_image)
+
+        draw.rectangle(unscale_ratio * y.data.numpy(), outline='green')
+        draw.rectangle(unscale_ratio * output.data.numpy(), outline='red')
+
+        del draw
+
+        vis.image(np.array(search_image).transpose(2, 0, 1), win="Iteration__ValidationImage", opts={ 'caption': "Validation Image # {}".format(i) })
+
         loss = criterion(output, y)
         running_loss += loss.data[0]
         print('[validation] epoch = %d, i = %d, loss = %f' % (epoch, i, loss.data[0]))

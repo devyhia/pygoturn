@@ -8,7 +8,7 @@ from . import model
 import torch
 from torch.autograd import Variable
 from torchvision import transforms
-from .helper import ToTensor, Normalize, show_batch
+from .helper import ToTensor, Normalize, show_batch, scale_ratio, unscale_ratio
 import torch.optim as optim
 import numpy as np
 from .helper import *
@@ -84,7 +84,6 @@ class Tester(Dataset):
         #print('Sample: ', sample)
         #print('Pred. BBox: ', bb)
         # Undo Normalize (from 0..10 to 0..227)
-        unscale_ratio = 227. / 10.
         bb = bb[:,0]
         bb = bb* unscale_ratio
         prevbb = self.prev_rect
