@@ -36,9 +36,10 @@ class Rescale(object):
             new_h, new_w = self.output_size
 
         new_h, new_w = int(new_h), int(new_w)
+        # Rescale Image to new size
         img = transform.resize(image, (new_h, new_w))
         img = img_as_ubyte(img)
-        # complete from here
+        # Rescale bounding box into the new size
         bb = [bb[0]*new_w/w, bb[1]*new_h/h, bb[2]*new_w/w, bb[3]*new_h/h]
         return {'image': img, 'bb':bb}
 
@@ -55,6 +56,20 @@ class CropPrev(object):
         if (len(image.shape) == 2):
             image = np.repeat(image[...,None],3,axis=2)
         im = Image.fromarray(image)
+
+<<<<<<< HEAD
+        # Get width and height of the bounding box
+        w = bb[2]-bb[0]
+        h = bb[3]-bb[1]
+
+        # Get width and heigh of the image
+        img_h, img_w = image.shape[:2]
+
+        # Expand the bounding box to include more context (i.e. double the size)
+        left = min(0, bb[0]-w/2)
+        top = min(0, bb[1]-h/2)
+        right = max(img_w, left + 2*w)
+        bottom = max(img_h, top + 2*h)
 
         # Width & Height of New Context
         w = bb[2]-bb[0]
@@ -89,6 +104,20 @@ class CropCurr(object):
         if (len(image.shape) == 2):
             image = np.repeat(image[...,None],3,axis=2)
         im = Image.fromarray(image)
+
+<<<<<<< HEAD
+        # Get width and height of the current bounding box
+        w = prevbb[2]-prevbb[0]
+        h = prevbb[3]-prevbb[1]
+
+        # Get width and height of the original image
+        img_h, img_w = image.shape[:2]
+
+        # Expand the bounding box by a factor of 2 with keeping its center
+        left = max(0, prevbb[0]-w/2)
+        top = max(0, prevbb[1]-h/2)
+        right = min(img_w, left + 2*w)
+        bottom = min(img_h, top + 2*h)
 
         # Width & Height of the bounding box
         w = prevbb[2]-prevbb[0]
@@ -154,7 +183,6 @@ class Normalize(object):
         curr_img = curr_img.astype(float)
         prev_img -= np.array(self.mean).astype(float)
         curr_img -= np.array(self.mean).astype(float)
-        #print('Curr BBox: ', currbb)
         currbb = scale_ratio * np.array(currbb);
         return {'previmg': prev_img,
                 'currimg': curr_img,
