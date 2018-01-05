@@ -57,7 +57,6 @@ class CropPrev(object):
             image = np.repeat(image[...,None],3,axis=2)
         im = Image.fromarray(image)
 
-<<<<<<< HEAD
         # Get width and height of the bounding box
         w = bb[2]-bb[0]
         h = bb[3]-bb[1]
@@ -105,7 +104,6 @@ class CropCurr(object):
             image = np.repeat(image[...,None],3,axis=2)
         im = Image.fromarray(image)
 
-<<<<<<< HEAD
         # Get width and height of the current bounding box
         w = prevbb[2]-prevbb[0]
         h = prevbb[3]-prevbb[1]

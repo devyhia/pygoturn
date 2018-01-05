@@ -16,6 +16,7 @@ from .get_bbox import *
 from torch.utils.data import Dataset
 from matplotlib import animation, rc
 from PIL import Image, ImageDraw
+from glob import glob
 
 use_gpu = torch.cuda.is_available()
 parser = argparse.ArgumentParser(description='GOTURN Training')
@@ -25,7 +26,7 @@ parser.add_argument('-data', '--data-directory', default='../data/alov300/imaged
 
 class Tester(Dataset):
     """Test Dataset for Tester"""
-    def __init__(self, root_dir, model_path, init_box=None, save_dir=None):
+    def __init__(self, root_dir, model_path, init_box=None, save_dir=None, ignore_gpu=False):
         self.root_dir = root_dir
         self.transform = transforms.Compose([Normalize(), ToTensor()])
         self.model_path = model_path
@@ -34,17 +35,17 @@ class Tester(Dataset):
         if use_gpu:
             self.model = self.model.cuda()
 
-        state = torch.load(model_path)
+        state = torch.load(model_path) if not ignore_gpu else torch.load(model_path, map_location=lambda storage, loc: storage)
         self.model.load_state_dict(state)
 
-        frames = os.listdir(root_dir)
+        frames = glob(root_dir)
         self.len = len(frames)-1
-        frames = [root_dir + "/" + frame for frame in frames]
         frames = np.array(frames)
         frames.sort()
         self.x = []
-        for i in range(self.len):
-            self.x.append([frames[i], frames[i+1]])
+        step = 5
+        for i in range(0, self.len, step):
+            self.x.append([frames[i], frames[i+step]])
         self.x = np.array(self.x)
         # code for previous rectange
         self.init_bbox = bbox_coordinates(self.x[0][0]) if init_box is None else init_box
