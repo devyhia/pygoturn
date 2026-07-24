@@ -7,7 +7,7 @@ import matplotlib.patches as patches
 from skimage import io, transform
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
-from helper import *
+from .helper import *
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -21,7 +21,7 @@ class ALOVDataset(Dataset):
         self.y = []
         self.x = []
         self.transform = transform
-        envs = os.listdir(target_dir)  
+        envs = os.listdir(target_dir)
         for env in envs:
             env_videos = os.listdir(root_dir + env)
             for vid in env_videos:
@@ -35,7 +35,7 @@ class ALOVDataset(Dataset):
                 f.close()
                 frame_idxs = [int(ann.split(' ')[0])-1 for ann in annotations]
                 frames = np.array(frames)
-                for i in xrange(len(frame_idxs)-1):
+                for i in range(len(frame_idxs)-1):
                     idx = frame_idxs[i]
                     next_idx = frame_idxs[i+1]
                     self.x.append([frames[idx], frames[next_idx]])
@@ -60,12 +60,15 @@ class ALOVDataset(Dataset):
     def get_sample(self, idx):
         prev = io.imread(self.x[idx][0])
         curr = io.imread(self.x[idx][1])
-        prevbb = self.get_bb(self.y[idx][0]) 
+        prevbb = self.get_bb(self.y[idx][0])
         currbb = self.get_bb(self.y[idx][1])
+
+        #rint('prevbb: ', prevbb)
+        #print('currbb: ', currbb)
         # Crop previous image with height and width twice the prev bounding box height and width
         # Scale the cropped image to (227,227,3)
-        crop_prev = CropPrev(128)
-        crop_curr = CropCurr(128)
+        crop_prev = CropPrev()
+        crop_curr = CropCurr()
         scale = Rescale((227,227))
         transform_prev = transforms.Compose([crop_prev, scale])
         prev_img = transform_prev({'image':prev, 'bb':prevbb})['image']
@@ -76,7 +79,7 @@ class ALOVDataset(Dataset):
         curr_img = curr_obj['image']
         currbb = curr_obj['bb']
         currbb = np.array(currbb)
-        sample = {'previmg': prev_img, 
+        sample = {'previmg': prev_img,
                 'currimg': curr_img,
                 'currbb' : currbb
                 }
@@ -112,6 +115,6 @@ class ALOVDataset(Dataset):
         ax1.imshow(x['previmg'])
         ax2.imshow(x['currimg'])
         bb = x['currbb']
-        rect = patches.Rectangle((bb[0], bb[1]),bb[2]-bb[0],bb[3]-bb[1],linewidth=1,edgecolor='r',facecolor='none')
+        rect = patches.Rectangle(scale_ratio * (bb[0], bb[1]), scale_ratio *(bb[2]-bb[0]), scale_ratio * (bb[3]-bb[1]), linewidth=1,edgecolor='r',facecolor='none')
         ax2.add_patch(rect)
         plt.show()
